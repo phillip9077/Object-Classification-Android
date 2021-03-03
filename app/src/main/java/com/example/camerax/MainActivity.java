@@ -1,16 +1,4 @@
-package com.example.camerax;
-
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.AspectRatio;
-import androidx.camera.core.CameraSelector;
-import androidx.camera.core.ImageAnalysis;
-import androidx.camera.core.ImageProxy;
-import androidx.camera.core.Preview;
-import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.camera.view.PreviewView;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+    package com.example.camerax;
 
 import android.annotation.SuppressLint;
 import android.content.pm.ActivityInfo;
@@ -20,30 +8,43 @@ import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Size;
+import android.view.Surface;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.AspectRatio;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.mlkit.common.model.CustomRemoteModel;
-import com.google.mlkit.common.model.DownloadConditions;
 import com.google.mlkit.common.model.LocalModel;
-import com.google.mlkit.common.model.RemoteModelManager;
-import com.google.mlkit.linkfirebase.FirebaseModelSource;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.objects.DetectedObject;
 import com.google.mlkit.vision.objects.ObjectDetection;
 import com.google.mlkit.vision.objects.ObjectDetector;
 import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions;
 
+import java.io.File;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -51,14 +52,17 @@ public class MainActivity extends AppCompatActivity {
     private ObjectDetector objectDetector;
     private final int REQUEST_CODE_PERMISSIONS = 101;
     private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA"};
-    private final static String TAG = "MainActivity";
+    private final String TAG = "Anything unique ";
+    private Executor executor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        getSupportActionBar().hide();
 
         previewView = findViewById(R.id.previewView);
+        executor = ContextCompat.getMainExecutor(this);
 
         if (allPermissionsGranted()) {
             startCamera();
@@ -68,36 +72,10 @@ public class MainActivity extends AppCompatActivity {
                     REQUEST_CODE_PERMISSIONS);
         }
 
-        // Loads a LocalModel as well as downloading one hosted by Firebase
+        // Loads a LocalModel from a custom .tflite file
         LocalModel localModel = new LocalModel.Builder()
-                .setAssetFilePath("mobilenet_v1_1.0_224_quantized_1_metadata_1.tflite")
+                .setAssetFilePath("efficientnet_lite0_int8_2.tflite")
                 .build();
-//        CustomRemoteModel remoteModel = new CustomRemoteModel
-//                .Builder(new FirebaseModelSource.Builder("mobilenet_v1").build())
-//                .build();
-//        DownloadConditions downloadConditions = new DownloadConditions.Builder()
-//                .requireWifi()
-//                .build();
-//        RemoteModelManager.getInstance().download(remoteModel, downloadConditions);
-
-        // Checks if the Firebase model is downloaded, if not use the LocalModel
-//        RemoteModelManager.getInstance().isModelDownloaded(remoteModel)
-//                .addOnSuccessListener(new OnSuccessListener<Boolean>() {
-//                    @Override
-//                    public void onSuccess(Boolean isDownloaded) {
-//                        Log.i(TAG, "Firebase model downloaded correctly");
-//                        CustomObjectDetectorOptions.Builder optionsBuilder =
-//                                new CustomObjectDetectorOptions.Builder(remoteModel);
-//                        CustomObjectDetectorOptions customObjectDetectorOptions = optionsBuilder
-//                                .setDetectorMode(CustomObjectDetectorOptions.STREAM_MODE)
-//                                .enableClassification()
-//                                .setClassificationConfidenceThreshold(0.5f)
-//                                .setMaxPerObjectLabelCount(3)
-//                                .build();
-//                        objectDetector =
-//                                ObjectDetection.getClient(customObjectDetectorOptions);
-//                    }
-//                });
 
         CustomObjectDetectorOptions customObjectDetectorOptions =
                 new CustomObjectDetectorOptions.Builder(localModel)
@@ -137,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (ExecutionException | InterruptedException e) {
                 e.printStackTrace();
             }
-        }, ContextCompat.getMainExecutor(this));
+        }, executor);
     }
 
     /**
@@ -147,7 +125,9 @@ public class MainActivity extends AppCompatActivity {
      */
     private void bindPreviewAndAnalyzer(@NonNull ProcessCameraProvider cameraProvider) {
         // Set up the view finder use case to display camera preview
-        Preview preview = new Preview.Builder().build();
+        Preview preview = new Preview.Builder()
+                .setTargetResolution(new Size(1920, 1080))
+                .build();
         // Connect the preview use case to the previewView
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
         // Choose the camera by requiring a lens facing
@@ -157,10 +137,10 @@ public class MainActivity extends AppCompatActivity {
 
         // Creates an ImageAnalysis for analyzing the camera preview feed
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
-                .setTargetResolution(new Size(1280, 720))
+                .setTargetResolution(new Size(1920, 1080))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
-        imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(this),
+        imageAnalysis.setAnalyzer(executor,
                 new ImageAnalysis.Analyzer() {
                     @Override
                     public void analyze(@NonNull ImageProxy imageProxy) {
@@ -168,15 +148,18 @@ public class MainActivity extends AppCompatActivity {
                                 imageProxy.getImage();
                         if (mediaImage != null) {
                             processImage(mediaImage, imageProxy)
-                            .addOnCompleteListener(new OnCompleteListener<List<DetectedObject>>() {
-                                @Override
-                                public void onComplete(@NonNull Task<List<DetectedObject>> task) {
-                                    imageProxy.close();
-                                }
-                            });
+                                    .addOnCompleteListener(new OnCompleteListener<List<DetectedObject>>() {
+                                        @Override
+                                        public void onComplete(@NonNull Task<List<DetectedObject>> task) {
+                                            imageProxy.close();
+                                        }
+                                    });
                         }
                     }
                 });
+
+        // Unbind all previous use cases before binding new ones
+        cameraProvider.unbindAll();
 
         // Attach use cases to the camera with the same lifecycle owner
         cameraProvider.bindToLifecycle(this,
@@ -187,6 +170,7 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * Throws an InputImage into the ML Kit ObjectDetector for processing
+     *
      * @param mediaImage the Image image converted from the ImageProxy image
      * @param imageProxy the ImageProxy image from the camera preview
      */
@@ -199,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(@NonNull Exception e) {
                         String error = "Failed to process. Error: " + e.getMessage();
-                        Log.i(TAG, error);
+                        Log.e(TAG, error);
                     }
                 })
                 .addOnSuccessListener(new OnSuccessListener<List<DetectedObject>>() {

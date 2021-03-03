@@ -1,7 +1,6 @@
 plugins {
     id 'com.android.application'
     id 'com.google.gms.google-services'
-    id 'com.google.firebase.crashlytics'
 
 }
 
@@ -50,16 +49,6 @@ dependencies {
     implementation "androidx.camera:camera-view:1.0.0-alpha21"
     implementation "androidx.camera:camera-lifecycle:${camerax_version}"
 
-    // The Firebase BoM
-    implementation platform('com.google.firebase:firebase-bom:26.5.0')
-
-    // Object detection & tracking feature with model downloaded
-    // from firebase
+    // Object detection & tracking feature with custom model
     implementation 'com.google.mlkit:object-detection-custom:16.3.1'
-    implementation 'com.google.mlkit:linkfirebase:16.1.0'
-
-    // Additional Firebase Plugins
-    implementation 'com.google.firebase:firebase-analytics'
-    implementation 'com.google.firebase:firebase-crashlytics'
-
 }
