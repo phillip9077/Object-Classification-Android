@@ -1,27 +1,22 @@
-    package com.example.camerax;
+package com.example.camerax;
 
 import android.annotation.SuppressLint;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.graphics.Rect;
+import android.content.res.Configuration;
 import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Size;
+import android.view.OrientationEventListener;
 import android.view.Surface;
-import android.view.View;
-import android.widget.Button;
-import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.AspectRatio;
-import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
-import androidx.camera.core.ImageCapture;
-import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -41,7 +36,6 @@ import com.google.mlkit.vision.objects.ObjectDetection;
 import com.google.mlkit.vision.objects.ObjectDetector;
 import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions;
 
-import java.io.File;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -52,13 +46,14 @@ public class MainActivity extends AppCompatActivity {
     private ObjectDetector objectDetector;
     private final int REQUEST_CODE_PERMISSIONS = 101;
     private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA"};
-    private final String TAG = "Anything unique ";
+    private final static String TAG = "Anything unique";
     private Executor executor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         getSupportActionBar().hide();
 
         previewView = findViewById(R.id.previewView);
@@ -100,6 +95,17 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Checks the orientation of the screen
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            Toast.makeText(this, "landscape", Toast.LENGTH_SHORT).show();
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            Toast.makeText(this, "portrait", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     /**
      * Starts the camera preview
      */
@@ -126,7 +132,7 @@ public class MainActivity extends AppCompatActivity {
     private void bindPreviewAndAnalyzer(@NonNull ProcessCameraProvider cameraProvider) {
         // Set up the view finder use case to display camera preview
         Preview preview = new Preview.Builder()
-                .setTargetResolution(new Size(1920, 1080))
+                .setTargetResolution(new Size(1280, 720))
                 .build();
         // Connect the preview use case to the previewView
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
@@ -137,9 +143,35 @@ public class MainActivity extends AppCompatActivity {
 
         // Creates an ImageAnalysis for analyzing the camera preview feed
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
-                .setTargetResolution(new Size(1920, 1080))
+                .setTargetResolution(new Size(1280, 720))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
+
+        // This part is only needed if the device you're working on is capable of rotating between
+        // portrait and landscape mode. In the VAB-950 this is not possible, so this is not
+        // necessary to make the app work.
+//        OrientationEventListener mOrientationEventListener =
+//                new OrientationEventListener(this) {
+//                    @Override
+//                    public void onOrientationChanged(int orientation) {
+//                        int rotation;
+//
+//                        // Monitors orientation values to determine the target rotation value
+//                        if (orientation >= 45 && orientation < 135) {
+//                            rotation = Surface.ROTATION_270;
+//                        } else if (orientation >= 135 && orientation < 225) {
+//                            rotation = Surface.ROTATION_180;
+//                        } else if (orientation >= 225 && orientation < 315) {
+//                            rotation = Surface.ROTATION_90;
+//                        } else {
+//                            rotation = Surface.ROTATION_0;
+//                        }
+//                        // Updates target rotation value to {@link ImageAnalysis}
+//                        imageAnalysis.setTargetRotation(rotation);
+//                    }
+//                };
+//        mOrientationEventListener.enable();
+
         imageAnalysis.setAnalyzer(executor,
                 new ImageAnalysis.Analyzer() {
                     @Override
@@ -161,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
         // Unbind all previous use cases before binding new ones
         cameraProvider.unbindAll();
 
-        // Attach use cases to the camera with the same lifecycle owner
+        // Attach use cases to our lifecycle owner, the app itself
         cameraProvider.bindToLifecycle(this,
                 cameraSelector,
                 preview,
@@ -189,21 +221,23 @@ public class MainActivity extends AppCompatActivity {
                 .addOnSuccessListener(new OnSuccessListener<List<DetectedObject>>() {
                     @Override
                     public void onSuccess(List<DetectedObject> results) {
-                        String success = "Object(s) detected successfully!";
                         String text = "";
-                        int index = 0;
                         float confidence = 0;
                         for (DetectedObject detectedObject : results) {
-                            Rect boundingBox = detectedObject.getBoundingBox();
-                            Integer trackingId = detectedObject.getTrackingId();
                             for (DetectedObject.Label label : detectedObject.getLabels()) {
                                 text = label.getText();
-                                index = label.getIndex();
                                 confidence = label.getConfidence();
                             }
                         }
-                        Log.i(TAG, success + "; " + "Object detected: " + text + "; "
-                                + "Confidence: " + confidence);
+                        TextView textView = findViewById(R.id.resultText);
+                        TextView confText = findViewById(R.id.confidence);
+                        if (!text.equals("")) {
+                            textView.setText(text);
+                            confText.setText(String.format("Confidence = %f", confidence));
+                        } else {
+                            textView.setText("Detecting");
+                            confText.setText("?");
+                        }
                     }
                 });
     }
